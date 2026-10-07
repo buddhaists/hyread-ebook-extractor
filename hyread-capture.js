@@ -14,8 +14,15 @@
     window.__hyread_blobs = window.__hyread_blobs || [];
     const _origCreateObjectURL = URL.createObjectURL;
     URL.createObjectURL = function(obj) {
-        if (obj instanceof Blob && (obj.type.startsWith('image/') || obj.size > 20000)) {
-            window.__hyread_blobs.push(obj);
+        if (obj instanceof Blob && (obj.type.startsWith('image/') || (obj.type === '' && obj.size > 20000))) {
+            const slice = obj.slice(0, 4);
+            slice.arrayBuffer().then(buf => {
+                const b = new Uint8Array(buf);
+                const isImg = (b[0] === 0xff && b[1] === 0xd8) || (b[0] === 0x89 && b[1] === 0x50) || (b[0] === 0x52 && b[1] === 0x49);
+                if (isImg) {
+                    window.__hyread_blobs.push(obj);
+                }
+            }).catch(() => {});
         }
         return _origCreateObjectURL.apply(this, arguments);
     };

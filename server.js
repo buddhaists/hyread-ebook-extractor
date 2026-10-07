@@ -51,11 +51,24 @@ const server = http.createServer((req, res) => {
                 }
             }
 
-            const filename = `page_${String(pageNum).padStart(3, '0')}.${ext}`;
+            const buf = Buffer.concat(chunks);
+            const isJpeg = buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+            const isPng = buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+            const isWebp = buf.length > 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP';
+
+            if (!isJpeg && !isPng && !isWebp) {
+                console.warn(`[略過非圖片檔案] 接收到非圖檔資料 (${buf.length} bytes)，不予寫入。`);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ status: 'ignored', reason: 'not_an_image' }));
+                return;
+            }
+
+            const realExt = isJpeg ? 'jpg' : (isPng ? 'png' : 'webp');
+            const filename = `page_${String(pageNum).padStart(3, '0')}.${realExt}`;
             const targetPath = path.join(targetFolder, filename);
 
-            fs.writeFileSync(targetPath, Buffer.concat(chunks));
-            console.log(`[成功儲存] ${filename} -> ${targetPath} (${Math.round(chunks.reduce((a, b) => a + b.length, 0) / 1024)} KB)`);
+            fs.writeFileSync(targetPath, buf);
+            console.log(`[成功儲存] ${filename} -> ${targetPath} (${Math.round(buf.length / 1024)} KB)`);
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ status: 'ok', filename, path: targetPath }));
